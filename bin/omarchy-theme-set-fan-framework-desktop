@@ -110,35 +110,29 @@ THEME_NAME=$(cat "$HOME/.local/state/omarchy/current/theme.name" 2>/dev/null)
 OVERRIDE_FILE="$HOME/.config/omarchy/fan-colors/${THEME_NAME}.txt"
 THEME_FILE="$HOME/.local/state/omarchy/current/theme/framework-desktop-fan.rgb"
 
-# Check for user override first
+colors=()
+
+# A user override wins. A malformed override is reported and nothing is
+# applied, so a typo cannot masquerade as a successful color change.
 if [[ -n $THEME_NAME && -f $OVERRIDE_FILE ]]; then
-  if ! parse_override_colors "$OVERRIDE_FILE"; then
-    exit 1
-  fi
-
-  count=${#colors[@]}
-
-  # A single color fills all eight fan zones.
-  if (( count == 1 )); then
-    while (( ${#colors[@]} < 8 )); do
-      colors+=("${colors[0]}")
-    done
-    count=8
-  fi
-
-  if (( count == 8 )); then
-    # Convert to 0x prefix already done; override colors bypass calibration.
-    apply_rgb "${colors[@]}" || exit 1
-    exit 0
-  elif (( count > 0 )); then
-    echo "omarchy-theme-set-fan-framework-desktop: $OVERRIDE_FILE must define 1 or 8 colors, got $count" >&2
-    exit 1
-  fi
-  # Zero colors falls through to the theme color below.
+  parse_override_colors "$OVERRIDE_FILE" || exit 1
 fi
 
-# Use theme accent color (with calibration)
-if [[ -f $THEME_FILE ]]; then
+# A single color fills all eight fan zones.
+if (( ${#colors[@]} == 1 )); then
+  while (( ${#colors[@]} < 8 )); do
+    colors+=("${colors[0]}")
+  done
+fi
+
+if (( ${#colors[@]} == 8 )); then
+  # Override colors bypass calibration: they are already hardware-tuned.
+  apply_rgb "${colors[@]}" || exit 1
+elif (( ${#colors[@]} > 0 )); then
+  echo "omarchy-theme-set-fan-framework-desktop: $OVERRIDE_FILE must define 1 or 8 colors, got ${#colors[@]}" >&2
+  exit 1
+elif [[ -f $THEME_FILE ]]; then
+  # No override: use the calibrated theme accent color.
   color=$(cat "$THEME_FILE")
   color=${color//[[:space:]]/}
 
